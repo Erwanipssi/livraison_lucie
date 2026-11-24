@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f4e9df" />
+    <meta name="description" content="Une livraison un peu particulière vous attend." />
+    <meta name="robots" content="noindex" />
+    <meta property="og:title" content="Une livraison un peu particulière vous attend" />
+    <meta property="og:description" content="Avis de passage n°0001 — Maison Florale" />
+    <meta property="og:type" content="website" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23f6ede3' stroke='%23c9a36a' stroke-width='2'/%3E%3Cpath d='M32 14c6 6 8 12 0 20-8-8-6-14 0-20z' fill='%23b4606d'/%3E%3Cpath d='M32 34v16' stroke='%23587340' stroke-width='2'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;500&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=DM+Mono:wght@400&family=Inter:wght@300;400;500&family=Pinyon+Script&display=swap"
+      rel="stylesheet"
+    />
+    <title>Une livraison pour vous</title>
+    <script>
+      // Outil de test : ?raf=timeout simule requestAnimationFrame (fenêtres non affichées).
+      if (/[?&]raf=timeout/.test(location.search)) {
+        window.requestAnimationFrame = (cb) => setTimeout(() => cb(performance.now()), 16);
+        window.cancelAnimationFrame = (id) => clearTimeout(id);
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="scene" aria-label="Scène 3D : votre livraison"></canvas>
+      <div class="vignette" aria-hidden="true"></div>
+      <div class="grain" aria-hidden="true"></div>
+      <div id="ui"></div>
+    </div>
+    <noscript>
+      <p style="font-family: Georgia, serif; text-align: center; padding: 3rem">
+        Cette livraison a besoin de JavaScript pour être ouverte.
+      </p>
+    </noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
