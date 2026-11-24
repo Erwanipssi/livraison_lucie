@@ -21,7 +21,12 @@ export class Hud {
     this.soundBtn = el('button', 'hud__sound', { type: 'button', 'aria-pressed': 'false', 'aria-label': 'Activer le son' }) as HTMLButtonElement;
     this.soundBtn.innerHTML = `<span class="eq"><i></i><i></i><i></i><i></i></span><span class="hud__soundlabel">Son</span>`;
     this.soundBtn.addEventListener('click', async () => {
-      const on = await this.onSound();
+      let on = false;
+      try {
+        on = await this.onSound();
+      } catch (e) {
+        console.warn('Audio indisponible', e);
+      }
       this.soundBtn.setAttribute('aria-pressed', String(on));
       this.soundBtn.setAttribute('aria-label', on ? 'Couper le son' : 'Activer le son');
       this.soundBtn.classList.toggle('is-on', on);

@@ -40,9 +40,11 @@ export class AudioEngine {
     this.master = ctx.createGain();
     this.master.gain.value = 0;
     const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -18;
-    comp.ratio.value = 3;
-    this.master.connect(comp).connect(ctx.destination);
+    comp.threshold.value = -20;
+    comp.ratio.value = 4;
+    const makeup = ctx.createGain();
+    makeup.gain.value = 1.6;
+    this.master.connect(comp).connect(makeup).connect(ctx.destination);
 
     this.reverb = ctx.createConvolver();
     this.reverb.buffer = this.impulse(3.8, 2.6);
@@ -77,15 +79,56 @@ export class AudioEngine {
     return buf;
   }
 
+  /**
+   * iOS : le Web Audio est coupé par l'interrupteur silencieux tant qu'aucun
+   * élément <audio> ne joue. On lance donc une boucle de silence (et on
+   * déclare la session audio en « lecture ») pendant le geste utilisateur.
+   */
+  private unlockMobile() {
+    const nav = navigator as Navigator & { audioSession?: { type: string } };
+    try {
+      if (nav.audioSession) nav.audioSession.type = 'playback';
+    } catch {
+      /* non supporté */
+    }
+    if (!this.silent) {
+      this.silent = new Audio(silentWavUrl());
+      this.silent.loop = true;
+      this.silent.setAttribute('playsinline', '');
+      this.silent.volume = 0.01;
+    }
+    this.silent.play().catch(() => undefined);
+  }
+  private silent: HTMLAudioElement | null = null;
+  private resumeHandler = () => {
+    if (this.enabled && this.ctx && this.ctx.state !== 'running') {
+      this.ctx.resume().catch(() => undefined);
+      this.silent?.play().catch(() => undefined);
+    }
+  };
+
   async enable() {
+    // tout ce qui suit doit démarrer de façon synchrone dans le geste (Safari)
+    this.unlockMobile();
     if (!this.ctx) this.init();
     const ctx = this.ctx!;
-    if (ctx.state !== 'running') await ctx.resume();
+    const resumed = ctx.state === 'running' ? Promise.resolve() : ctx.resume();
+    // petite note immédiate : débloque la sortie sur certains Android
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    g.gain.value = 0.0001;
+    osc.connect(g).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.05);
+    await Promise.race([resumed.catch(() => undefined), new Promise((r) => setTimeout(r, 800))]);
     this.enabled = true;
+    window.addEventListener('pointerdown', this.resumeHandler, { passive: true });
+    document.addEventListener('visibilitychange', this.resumeHandler);
     const t = ctx.currentTime;
     this.master.gain.cancelScheduledValues(t);
     this.master.gain.setValueAtTime(this.master.gain.value, t);
-    this.master.gain.linearRampToValueAtTime(this.cfg.volume, t + 2.5);
+    this.master.gain.linearRampToValueAtTime(this.cfg.volume, t + 1.5);
+    this.sfx('chime');
     this.nextChord = t + 0.1;
     this.nextBeat = t + 1.2;
     window.clearInterval(this.timer);
@@ -95,6 +138,9 @@ export class AudioEngine {
   disable() {
     this.enabled = false;
     window.clearInterval(this.timer);
+    this.silent?.pause();
+    window.removeEventListener('pointerdown', this.resumeHandler);
+    document.removeEventListener('visibilitychange', this.resumeHandler);
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     this.master.gain.cancelScheduledValues(t);
@@ -116,7 +162,7 @@ export class AudioEngine {
   setPaused(paused: boolean) {
     if (!this.ctx || !this.enabled) return;
     if (paused) this.ctx.suspend();
-    else this.ctx.resume();
+    else this.ctx.resume().catch(() => undefined);
   }
 
   private schedule() {
@@ -135,7 +181,7 @@ export class AudioEngine {
         const chord = CHORDS[(this.chordIdx - 1 + CHORDS.length) % CHORDS.length];
         const pool = MELODY.filter((m) => chord.some((c) => (m - c) % 12 === 0) || Math.random() < 0.3);
         const m = pool[Math.floor(Math.random() * pool.length)] ?? 81;
-        this.musicBox(mtof(m), this.nextBeat + (Math.random() - 0.5) * 0.04, 0.07, Math.random() * 1.2 - 0.6, this.music);
+        this.musicBox(mtof(m), this.nextBeat + (Math.random() - 0.5) * 0.04, 0.11, Math.random() * 1.2 - 0.6, this.music);
       }
       this.nextBeat += beat * (Math.random() < 0.2 ? 0.5 : 1);
     }
@@ -155,7 +201,8 @@ export class AudioEngine {
     env.gain.setValueAtTime(0.11, t + dur - 0.5);
     env.gain.linearRampToValueAtTime(0, t + dur + 3);
     filter.connect(env).connect(this.music);
-    for (const n of notes) {
+    // une octave au-dessus : audible sur les petits haut-parleurs de téléphone
+    for (const n of [...notes, ...notes.slice(1).map((m) => m + 12)]) {
       for (const [type, det] of [['sine', -5], ['triangle', 6]] as const) {
         const o = ctx.createOscillator();
         o.type = type;
@@ -254,4 +301,20 @@ export class AudioEngine {
       }
     }
   }
+}
+
+/** Petit WAV silencieux (0,5 s) généré en mémoire, pour l'astuce iOS. */
+let silentUrl = '';
+function silentWavUrl() {
+  if (silentUrl) return silentUrl;
+  const rate = 8000, n = rate / 2;
+  const buf = new ArrayBuffer(44 + n * 2);
+  const v = new DataView(buf);
+  const w = (o: number, str: string) => [...str].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  w(36, 'data'); v.setUint32(40, n * 2, true);
+  silentUrl = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  return silentUrl;
 }
