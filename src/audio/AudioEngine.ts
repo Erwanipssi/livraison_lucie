@@ -1,5 +1,9 @@
 import type { AppConfig } from '../config';
 
+const IS_IOS =
+  /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+  /[?&]iosaudio=1/.test(location.search); // test du chemin iOS sur ordinateur
+
 const mtof = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 
 // Progression douce en ré majeur : Dmaj9 – Bm9 – Gmaj9 – Asus
@@ -44,7 +48,21 @@ export class AudioEngine {
     comp.ratio.value = 4;
     const makeup = ctx.createGain();
     makeup.gain.value = 1.6;
-    this.master.connect(comp).connect(makeup).connect(ctx.destination);
+    this.master.connect(comp).connect(makeup);
+    this.output = makeup;
+    // iOS : tout le son passe par un vrai lecteur <audio> (lecture « média »,
+    // ignore l'interrupteur silencieux, pas de conflit avec un 2e lecteur).
+    if (IS_IOS && typeof ctx.createMediaStreamDestination === 'function') {
+      const dest = ctx.createMediaStreamDestination();
+      makeup.connect(dest);
+      const el = new Audio();
+      el.srcObject = dest.stream;
+      el.setAttribute('playsinline', '');
+      this.outputEl = el;
+    } else {
+      makeup.connect(ctx.destination);
+    }
+    ctx.onstatechange = () => this.resumeHandler();
 
     this.reverb = ctx.createConvolver();
     this.reverb.buffer = this.impulse(3.8, 2.6);
@@ -84,13 +102,28 @@ export class AudioEngine {
    * élément <audio> ne joue. On lance donc une boucle de silence (et on
    * déclare la session audio en « lecture ») pendant le geste utilisateur.
    */
-  private unlockMobile() {
+  private setPlaybackSession() {
     const nav = navigator as Navigator & { audioSession?: { type: string } };
     try {
       if (nav.audioSession) nav.audioSession.type = 'playback';
     } catch {
       /* non supporté */
     }
+  }
+
+  /** Repli iOS : boucle de silence + sortie directe du contexte. */
+  private fallbackToDestination() {
+    if (!this.ctx || this.fellBack) return;
+    this.fellBack = true;
+    this.outputEl = null;
+    this.output.connect(this.ctx.destination);
+    this.playSilentLoop();
+  }
+  private fellBack = false;
+  private output!: AudioNode;
+  private outputEl: HTMLAudioElement | null = null;
+
+  private playSilentLoop() {
     if (!this.silent) {
       this.silent = new Audio(silentWavUrl());
       this.silent.loop = true;
@@ -100,29 +133,32 @@ export class AudioEngine {
     this.silent.play().catch(() => undefined);
   }
   private silent: HTMLAudioElement | null = null;
+  /** Relance le son après une interruption (verrouillage, appel, autre appli…). */
   private resumeHandler = () => {
-    if (this.enabled && this.ctx && this.ctx.state !== 'running') {
-      this.ctx.resume().catch(() => undefined);
-      this.silent?.play().catch(() => undefined);
-    }
+    if (!this.enabled || !this.ctx || document.hidden) return;
+    if (this.ctx.state !== 'running') this.ctx.resume().catch(() => undefined);
+    if (this.outputEl?.paused) this.outputEl.play().catch(() => undefined);
+    if (this.fellBack && this.silent?.paused) this.silent.play().catch(() => undefined);
   };
 
   async enable() {
-    // tout ce qui suit doit démarrer de façon synchrone dans le geste (Safari)
-    this.unlockMobile();
+    // Tout ce qui suit démarre de façon synchrone dans le geste (exigé par Safari).
+    this.setPlaybackSession();
     if (!this.ctx) this.init();
     const ctx = this.ctx!;
     const resumed = ctx.state === 'running' ? Promise.resolve() : ctx.resume();
-    // petite note immédiate : débloque la sortie sur certains Android
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    g.gain.value = 0.0001;
-    osc.connect(g).connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.05);
+    if (this.outputEl) this.outputEl.play().catch(() => this.fallbackToDestination());
+    else if (IS_IOS) this.playSilentLoop();
+    // son inaudible immédiat : « déverrouille » la sortie audio
+    const buf = ctx.createBuffer(1, 1, ctx.sampleRate);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(this.output);
+    src.start(0);
     await Promise.race([resumed.catch(() => undefined), new Promise((r) => setTimeout(r, 800))]);
     this.enabled = true;
     window.addEventListener('pointerdown', this.resumeHandler, { passive: true });
+    window.addEventListener('touchend', this.resumeHandler, { passive: true });
     document.addEventListener('visibilitychange', this.resumeHandler);
     const t = ctx.currentTime;
     this.master.gain.cancelScheduledValues(t);
@@ -140,6 +176,7 @@ export class AudioEngine {
     window.clearInterval(this.timer);
     this.silent?.pause();
     window.removeEventListener('pointerdown', this.resumeHandler);
+    window.removeEventListener('touchend', this.resumeHandler);
     document.removeEventListener('visibilitychange', this.resumeHandler);
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
@@ -148,7 +185,10 @@ export class AudioEngine {
     this.master.gain.linearRampToValueAtTime(0, t + 0.8);
     const ctx = this.ctx;
     window.setTimeout(() => {
-      if (!this.enabled) ctx.suspend();
+      if (!this.enabled) {
+        ctx.suspend();
+        this.outputEl?.pause();
+      }
     }, 1000);
   }
 
@@ -307,7 +347,7 @@ export class AudioEngine {
 let silentUrl = '';
 function silentWavUrl() {
   if (silentUrl) return silentUrl;
-  const rate = 8000, n = rate / 2;
+  const rate = 44100, n = rate / 2;
   const buf = new ArrayBuffer(44 + n * 2);
   const v = new DataView(buf);
   const w = (o: number, str: string) => [...str].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));

@@ -50,7 +50,8 @@ export const config = {
     greeting: '{recipient},',
     paragraphs: [
       "Je voulais t'offrir des fleurs, mais il me manquait un petit détail.",
-      "J'espère que ça te fera plaisir, même si tu en mérites des montagnes (ne prends pas la grosse tête, même si ce serait mérité).",
+      "J'espère que ça te fera plaisir, même si tu en mérites des montagnes.",
+      "Tu es ma plus belle rencontre de ces dernières années, et cette fois-ci, je t'autorise à prendre la grosse tête… mais attention quand même 😉",
     ],
     signature: '{sender}',
     envelopeHint: 'Quelque chose se cache parmi les fleurs…',
