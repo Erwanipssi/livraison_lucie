@@ -23,14 +23,14 @@ export interface FlowerGroupConfig {
 
 export const config = {
   // ── Personnes ────────────────────────────────────────────────────────────
-  sender: 'Ton livreur',
-  recipient: 'Mademoiselle',
+  sender: 'Erwan',
+  recipient: 'Lucie',
 
   // ── Entreprise fictive ───────────────────────────────────────────────────
   brand: {
-    name: 'Maison Florale',
-    monogram: 'MF',
-    tagline: 'Livraisons délicates',
+    name: 'Les Fleurs de Lucie',
+    monogram: 'L',
+    tagline: 'Rien que pour toi',
   },
 
   // ── Acte 1 : la livraison ────────────────────────────────────────────────
@@ -50,7 +50,7 @@ export const config = {
     greeting: '{recipient},',
     paragraphs: [
       "Je voulais t'offrir des fleurs, mais il me manquait un petit détail.",
-      "J'espère que ça te fera plaisir même si tu en mérites des montagnes (prends pas la grosse tête, bien que ça serait mérité).",
+      "J'espère que ça te fera plaisir, même si tu en mérites des montagnes (ne prends pas la grosse tête, même si ce serait mérité).",
     ],
     signature: '{sender}',
     envelopeHint: 'Quelque chose se cache parmi les fleurs…',
@@ -67,7 +67,7 @@ export const config = {
       { label: 'Frais supplémentaires', value: 'Aucun' },
     ],
     totalLabel: 'Total à régler',
-    totalValue: 'Un sourire, madame',
+    totalValue: 'Ton plus beau sourire',
     status: 'Livraison effectuée avec succès.',
     finalMessage: "Les vraies fleurs arriveront dès que le livreur aura trouvé ton adresse.",
     stamp: 'Livré',

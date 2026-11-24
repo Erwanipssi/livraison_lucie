@@ -1,4 +1,4 @@
-# Maison Florale — livraison florale virtuelle
+# Les Fleurs de Lucie — livraison florale virtuelle
 
 Une expérience web immersive en cinq actes : un colis de luxe à réceptionner
 (avec signature), une ouverture cinématique, un bouquet 3D qui éclôt fleur
